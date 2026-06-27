@@ -15,11 +15,7 @@ npm install
 3. Copy your project URL and keys from **Settings → API**
 
 ### 3. Set up environment variables
-```bash
-cp .env.local.example .env.local
-```
-
-Edit `.env.local` with your actual keys:
+Add `.env.local` with your actual keys:
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
