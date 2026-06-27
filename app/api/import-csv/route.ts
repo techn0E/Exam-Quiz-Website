@@ -1,7 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 
+const parseCSVLine = (line: string): string[] => {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === "," && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+
+  result.push(current.trim());
+
+  return result;
+};
+
+
 export async function POST(req: NextRequest) {
+  const authHeader = req.headers.get("Authorization");
+
+  if (!authHeader) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+
+  const supabase = createServerClient();
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    return NextResponse.json(
+      { error: "Forbidden" },
+      { status: 403 }
+    );
+  }
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File;
@@ -17,20 +78,6 @@ export async function POST(req: NextRequest) {
     const firstLine = lines[0].toLowerCase();
     const hasHeader = firstLine.includes("question_text") || firstLine.includes("question");
     const dataLines = hasHeader ? lines.slice(1) : lines;
-
-    function parseCSVLine(line: string): string[] {
-      const result: string[] = [];
-      let current = "";
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === '"') { inQuotes = !inQuotes; }
-        else if (ch === "," && !inQuotes) { result.push(current.trim()); current = ""; }
-        else { current += ch; }
-      }
-      result.push(current.trim());
-      return result;
-    }
 
     const questions: Array<{ question_text: string; options: string[]; correct_answer: string }> = [];
 

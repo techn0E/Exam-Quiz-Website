@@ -3,6 +3,46 @@ import { createServerClient } from "@/lib/supabase";
 import pdf from "pdf-parse";
 
 export async function POST(req: NextRequest) {
+
+  const authHeader = req.headers.get("Authorization");
+
+  if (!authHeader) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+
+  const supabase = createServerClient();
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    return NextResponse.json(
+      { error: "Forbidden" },
+      { status: 403 }
+    );
+  }
+
+  
   try {
     
     const formData = await req.formData();

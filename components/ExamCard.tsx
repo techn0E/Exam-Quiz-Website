@@ -28,12 +28,32 @@ export default function ExamCard({ exam, index, onDeleted }: Props) {
 
   async function deleteExam() {
     if (!confirm("Delete this exam and all its questions?")) return;
+
     setDeleting(true);
-    await supabase.from("questions").delete().eq("exam_id", exam.id);
-    await supabase.from("exams").delete().eq("id", exam.id);
+
+    const q = await supabase
+      .from("questions")
+      .delete()
+      .eq("exam_id", exam.id);
+
+    console.log("Questions delete:", q);
+
+    const e = await supabase
+      .from("exams")
+      .delete()
+      .eq("id", exam.id);
+
+    console.log("Exam delete:", e);
+
+    if (q.error || e.error) {
+      alert(q.error?.message || e.error?.message);
+      setDeleting(false);
+      return;
+    }
+
     onDeleted();
   }
-
+  
   const canTake30 = exam.question_count >= 30;
   const canTake50 = exam.question_count >= 50;
 

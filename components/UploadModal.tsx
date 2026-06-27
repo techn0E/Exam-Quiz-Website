@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { X, Upload, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 interface Props {
   onClose: () => void;
@@ -20,12 +21,20 @@ export default function UploadModal({ onClose, onComplete }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   function handleFile(f: File) {
-    if (!f.name.endsWith(".pdf")) {
-      alert("Please upload a PDF file");
+    const name = f.name.toLowerCase();
+
+    if (!name.endsWith(".pdf") && !name.endsWith(".csv")) {
+      alert("Only PDF or CSV files are supported.");
       return;
     }
+
     setFile(f);
-    if (!examName) setExamName(f.name.replace(".pdf", ""));
+
+    if (!examName) {
+      setExamName(
+        f.name.replace(".pdf", "").replace(".csv", "")
+      );
+    }
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -39,35 +48,55 @@ export default function UploadModal({ onClose, onComplete }: Props) {
     if (!file || !examName.trim()) return;
 
     setStatus("uploading");
-    setStatusMsg("Reading PDF...");
+    setStatusMsg("Reading file...");
 
     try {
+      // Get current session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error("Please login as admin.");
+      }
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("examName", examName.trim());
 
-      setStatus("parsing");
-      setStatusMsg("Parser is extracting questions...");
+      const endpoint = file.name.toLowerCase().endsWith(".csv")
+        ? "/api/import-csv"
+        : "/api/parse-pdf";
 
-      const res = await fetch("/api/parse-pdf", {
+      setStatus("parsing");
+      setStatusMsg("Parsing questions...");
+
+      const res = await fetch(endpoint, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: formData,
       });
 
+      const json = await res.json();
+
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to parse PDF");
+        throw new Error(json.error || "Upload failed");
       }
 
-      const data = await res.json();
-      setQuestionCount(data.questionCount);
-      setStatus("done");
-      setStatusMsg(`Successfully extracted ${data.questionCount} questions!`);
+      setQuestionCount(json.questionCount);
 
-      setTimeout(() => onComplete(), 1500);
+      setStatus("done");
+      setStatusMsg(`Imported ${json.questionCount} questions.`);
+
+      setTimeout(() => {
+        onComplete();
+      }, 1200);
+
     } catch (err: any) {
       setStatus("error");
-      setStatusMsg(err.message || "Something went wrong");
+      setStatusMsg(err.message);
     }
   }
 
